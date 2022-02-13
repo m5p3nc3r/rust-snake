@@ -1,6 +1,10 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+mod point;
+mod snake;
+mod food;
+
 use std::cmp::min;
 use log::error;
 use instant::Instant;
@@ -15,6 +19,10 @@ use pixels::{Pixels, SurfaceTexture, wgpu::Color};
 use line_drawing::Bresenham;
 use rand::seq::SliceRandom;
 
+use crate::snake::Snake;
+use crate::food::Food;
+use crate::point::Point;
+
 const WIDTH: usize = 32;
 const HEIGHT: usize = 24;
 
@@ -26,17 +34,11 @@ enum Direction {
     Down
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
-struct Point {
-    x : i32,
-    y : i32,
+trait Move {
+    fn move_in_direction(&mut self, direction: Direction);
 }
 
-impl Point {
-    const fn new(x: i32, y: i32) ->  Self {
-        Self { x, y }
-    }
-
+impl Move for Point {
     fn move_in_direction(&mut self, direction: Direction) {
         match direction {
             Direction::Left => self.x -= 1,
@@ -47,50 +49,7 @@ impl Point {
     }
 }
 
-struct Snake {
-    points: Vec<Point>,
-}
 
-impl Snake {
-    fn new() -> Self {
-        Self {
-            points: vec![Point::new(10,10), Point::new(9, 10), Point::new(8,10), Point::new(7,10)],
-        }
-    }
-
-    fn contains(&self, point: Point) -> bool {
-        self.points.iter().any( |&p| p == point)
-    }
-
-    fn get_head(&self) -> Point {
-        self.points[0]
-    }
-}
-
-struct Food {
-    food: Vec<Point>,
-}
-
-impl Food {
-    fn new() -> Self {
-        Self {
-            food: vec![]
-        }
-    }
-
-    fn contains(&self, point: Point) -> bool {
-        self.food.iter().any( |&p| p == point)
-    }
-
-    fn eat(&mut self, point: Point) {
-        let index = self.food.iter().position(|f| *f==point);
-        if let Some(i) = index { self.food.remove(i); };
-    }
-
-    fn add(&mut self, food: Point) {
-        self.food.push(food);
-    }
-}
 
 struct World {
     width: usize,
@@ -140,7 +99,7 @@ impl World {
         let mut new_head = self.snake.get_head();
         new_head.move_in_direction(direction);
 
-        let hit_self = self.snake.contains(new_head);
+        let hit_self = self.snake.is_at(new_head);
         let hit_wall = self.hit_wall(new_head);
 
         !(hit_self || hit_wall)
@@ -155,7 +114,7 @@ impl World {
         self.snake.points.insert(0,head);
 
         // Pop the last point of the snake list
-        if self.food.contains(head) {
+        if self.food.is_at(head) {
             self.food.eat(head);
             self.add_food();
             self.tick_speed -= Duration::from_millis(10);
@@ -166,9 +125,9 @@ impl World {
 
 
     fn is_free(&self, point: Point) -> bool {
-        let hit_snake = self.snake.contains(point);
+        let hit_snake = self.snake.is_at(point);
         let hit_wall = self.hit_wall(point);
-        let hit_food = self.food.contains(point);
+        let hit_food = self.food.is_at(point);
 
         !hit_snake && !hit_wall && !hit_food
     }
