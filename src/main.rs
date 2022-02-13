@@ -67,6 +67,31 @@ impl Snake {
     }
 }
 
+struct Food {
+    food: Vec<Point>,
+}
+
+impl Food {
+    fn new() -> Self {
+        Self {
+            food: vec![]
+        }
+    }
+
+    fn contains(&self, point: Point) -> bool {
+        self.food.iter().any( |&p| p == point)
+    }
+
+    fn eat(&mut self, point: Point) {
+        let index = self.food.iter().position(|f| *f==point);
+        if let Some(i) = index { self.food.remove(i); };
+    }
+
+    fn add(&mut self, food: Point) {
+        self.food.push(food);
+    }
+}
+
 struct World {
     width: usize,
     height: usize,
@@ -75,19 +100,27 @@ struct World {
     tick_speed: Duration,
 
     snake: Snake,
+    food: Food,
 }
 
 impl World {
     fn new() -> Self {
-        Self {
+        let mut world = Self {
             width: WIDTH,
             height: HEIGHT,
 
             last_direction: Direction::Right,
-            tick_speed: Duration::new(1, 0),
+            tick_speed: Duration::from_millis(500),
 
-            snake: Snake::new()
-        }
+            snake: Snake::new(),
+            food: Food::new()
+        };
+
+        world.add_food();
+        world.add_food();
+        world.add_food();
+
+        world
     }
 
     fn tick(&mut self) {
@@ -101,10 +134,6 @@ impl World {
     fn hit_wall(&self, point: Point) -> bool {
         point.x == 0 || point.x == (self.width - 1) as i32 ||
         point.y == 0 || point.y == (self.height - 1) as i32
-    }
-
-    fn hit_food(&self, _point: Point) -> bool {
-        false
     }
 
     fn can_move_in_direction(&self, direction: Direction) -> bool {
@@ -126,7 +155,11 @@ impl World {
         self.snake.points.insert(0,head);
 
         // Pop the last point of the snake list
-        if !self.hit_food(head) {
+        if self.food.contains(head) {
+            self.food.eat(head);
+            self.add_food();
+            self.tick_speed -= Duration::from_millis(10);
+        } else { 
             self.snake.points.pop();
         }
     }
@@ -135,7 +168,7 @@ impl World {
     fn is_free(&self, point: Point) -> bool {
         let hit_snake = self.snake.contains(point);
         let hit_wall = self.hit_wall(point);
-        let hit_food = self.hit_food(point);
+        let hit_food = self.food.contains(point);
 
         !hit_snake && !hit_wall && !hit_food
     }
@@ -156,13 +189,13 @@ impl World {
         free
     }
 
-    fn add_food(&self) {
+    fn add_food(&mut self) {
         let free_spaces=self.get_free_spaces();
 
         let mut rng = rand::thread_rng();
-        let point = free_spaces.choose(&mut rng);
+        let food = free_spaces.choose(&mut rng);
 
-        println!{"New food at {:?}", point};
+        if let Some(f) = food { self.food.add(*f) };
     }
 
 
@@ -199,6 +232,7 @@ impl World {
         let black = [0x00, 0x00, 0x00, 0xff];
         let red = [0xff, 0x00, 0x00, 0xff];
         let white = [0xff, 0xff, 0xff, 0xff];
+        let green = [0x00, 0xff, 0x00, 0xff];
 
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&black);
@@ -209,10 +243,14 @@ impl World {
 
         self.rect(frame, x0, x1, red);
 
-        self.line(frame, Point::new(0,0), Point::new((self.width-1) as i32,0), red);
+        //self.line(frame, Point::new(0,0), Point::new((self.width-1) as i32,0), red);
         
         for point in &self.snake.points {
             self.point(frame, point, white);
+        }
+
+        for food in &self.food.food {
+            self.point(frame,food,green);
         }
     }
 }
