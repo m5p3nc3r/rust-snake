@@ -1,8 +1,10 @@
 
 use crate::point::Point;
 
+use std::ops::Deref;
+
 pub struct Snake {
-    pub points: Vec<Point>,
+    points: Vec<Point>,
 }
 
 impl Snake {
@@ -18,5 +20,20 @@ impl Snake {
 
     pub fn get_head(&self) -> Point {
         self.points[0]
+    }
+
+    pub fn add_head(&mut self, point: Point) {
+        self.points.insert(0,point);
+    }
+
+    pub fn remove_tail(&mut self) {
+        self.points.pop();
+    }
+}
+
+impl Deref for Snake {
+    type Target = Vec<Point>;
+    fn deref(&self) -> &Self::Target {
+        &self.points
     }
 }

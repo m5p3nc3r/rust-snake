@@ -111,7 +111,7 @@ impl World {
         head.move_in_direction(direction);
 
         // Place it at the head of the list
-        self.snake.points.insert(0,head);
+        self.snake.add_head(head);
 
         // Pop the last point of the snake list
         if self.food.is_at(head) {
@@ -119,7 +119,7 @@ impl World {
             self.add_food();
             self.tick_speed -= Duration::from_millis(10);
         } else { 
-            self.snake.points.pop();
+            self.snake.remove_tail();
         }
     }
 
@@ -202,11 +202,11 @@ impl World {
 
         self.rect(frame, x0, x1, red);
 
-        for point in &self.snake.points {
+        for point in self.snake.iter() {
             self.point(frame, point, white);
         }
 
-        for food in &self.food.food {
+        for food in self.food.iter() {
             self.point(frame,food,green);
         }
     }

@@ -1,7 +1,9 @@
 use crate::point::Point;
 
+use std::ops::Deref;
+
 pub struct Food {
-    pub food: Vec<Point>,
+    food: Vec<Point>,
 }
 
 impl Food {
@@ -22,5 +24,12 @@ impl Food {
 
     pub fn add(&mut self, food: Point) {
         self.food.push(food);
+    }
+}
+
+impl Deref for Food {
+    type Target = Vec<Point>;
+    fn deref(&self) -> &Self::Target {
+        &self.food
     }
 }
