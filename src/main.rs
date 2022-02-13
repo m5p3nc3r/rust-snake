@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod point;
+mod map;
 mod snake;
 mod food;
 mod world;

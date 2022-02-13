@@ -1,8 +1,8 @@
 use std::cmp::min;
 use std::time::Duration;
-use line_drawing::Bresenham;
 use rand::seq::SliceRandom;
 
+use crate::map::Map;
 use crate::snake::Snake;
 use crate::food::Food;
 use crate::point::Point;
@@ -43,6 +43,7 @@ pub struct World {
     pub last_direction: Direction,
     pub tick_speed: Duration,
 
+    map: Map,
     snake: Snake,
     food: Food,
 }
@@ -56,6 +57,7 @@ impl World {
             last_direction: Direction::Right,
             tick_speed: Duration::from_millis(500),
 
+            map: Map::new(WIDTH as i32, HEIGHT as i32),
             snake: Snake::new(),
             food: Food::new()
         };
@@ -75,17 +77,12 @@ impl World {
         }
     }
 
-    fn hit_wall(&self, point: Point) -> bool {
-        point.x == 0 || point.x == (self.width - 1) as i32 ||
-        point.y == 0 || point.y == (self.height - 1) as i32
-    }
-
     fn can_move_in_direction(&self, direction: Direction) -> bool {
         let mut new_head = self.snake.get_head();
         new_head.move_in_direction(direction);
 
         let hit_self = self.snake.is_at(new_head);
-        let hit_wall = self.hit_wall(new_head);
+        let hit_wall = self.map.wall_is_at(new_head);
 
         !(hit_self || hit_wall)
     }
@@ -111,7 +108,7 @@ impl World {
 
     fn is_free(&self, point: Point) -> bool {
         let hit_snake = self.snake.is_at(point);
-        let hit_wall = self.hit_wall(point);
+        let hit_wall = self.map.wall_is_at(point);
         let hit_food = self.food.is_at(point);
 
         !hit_snake && !hit_wall && !hit_food
@@ -153,25 +150,6 @@ impl World {
         frame[i..i + 4].copy_from_slice(&colour);
     }
 
-    fn line(&self, frame: &mut [u8], start: Point, end: Point, colour: [u8; 4]) {
-        let p1 = (start.x as i32, start.y as i32);
-        let p2 = (end.x as i32, end.y as i32);
-    
-        for (x, y) in Bresenham::new(p1, p2) {
-            self.point(frame, &Point::new(x, y), colour);
-        }
-    }
-
-    fn rect(&self, frame: &mut[u8], p0: Point, p3: Point, colour: [u8; 4]) {
-        let p1 = Point::new(p3.x, p0.y);
-        let p2 = Point::new(p0.x, p3.y);
-
-        self.line(frame, p0, p1, colour);
-        self.line(frame, p1, p3, colour);
-        self.line(frame, p3, p2, colour);
-        self.line(frame, p2, p0, colour);
-    }
-
     pub fn draw(&self, frame: &mut [u8] ) {
         let black = [0x00, 0x00, 0x00, 0xff];
         let red = [0xff, 0x00, 0x00, 0xff];
@@ -182,10 +160,9 @@ impl World {
             pixel.copy_from_slice(&black);
         }
 
-        let x0 = Point::new(0,0);
-        let x1= Point::new((self.width-1) as i32,(self.height-1) as i32);
-
-        self.rect(frame, x0, x1, red);
+        for point in self.map.iter() {
+            self.point(frame, point, red);
+        }
 
         for point in self.snake.iter() {
             self.point(frame, point, white);
