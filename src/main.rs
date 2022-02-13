@@ -243,8 +243,6 @@ impl World {
 
         self.rect(frame, x0, x1, red);
 
-        //self.line(frame, Point::new(0,0), Point::new((self.width-1) as i32,0), red);
-        
         for point in &self.snake.points {
             self.point(frame, point, white);
         }
