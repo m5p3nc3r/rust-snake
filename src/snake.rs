@@ -26,8 +26,8 @@ impl Snake {
         self.points.insert(0,point);
     }
 
-    pub fn remove_tail(&mut self) {
-        self.points.pop();
+    pub fn remove_tail(&mut self) -> Option<Point> {
+        self.points.pop()
     }
 }
 
@@ -36,4 +36,40 @@ impl Deref for Snake {
     fn deref(&self) -> &Self::Target {
         &self.points
     }
+}
+
+#[test]
+fn test_get_head() {
+    let snake = Snake::new();
+    let head = snake.get_head();
+    assert_eq!(head, Point::new(10, 10))
+}
+
+#[test]
+fn test_add_head() {
+    let mut snake = Snake::new();
+    let head = Point::new(11, 10);
+    snake.add_head(head);
+    assert_eq!(snake.points.len(), 5);
+    assert_eq!(snake.points[0], head);
+    assert_eq!(snake.get_head(), head);
+}
+
+#[test]
+fn remove_tail() {
+    let mut snake = Snake::new();
+    let tail = snake.remove_tail();
+    assert_eq!(snake.points.len(), 3);
+    assert_eq!(tail, Some(Point::new(7, 10)));
+}
+
+#[test]
+fn test_iter() {
+    let snake = Snake::new();
+    let mut iter = snake.iter();
+    assert_eq!(iter.next(), Some(&Point::new(10,10)));
+    assert_eq!(iter.next(), Some(&Point::new(9,10)));
+    assert_eq!(iter.next(), Some(&Point::new(8,10)));
+    assert_eq!(iter.next(), Some(&Point::new(7,10)));
+    assert_eq!(iter.next(), None);
 }
