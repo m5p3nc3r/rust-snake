@@ -1,5 +1,5 @@
 use crate::point::Point;
-use line_drawing::Bresenham;
+use crate::draw::{Rectangle};
 
 use std::ops::Deref;
 
@@ -22,23 +22,10 @@ impl Map {
         self.walls.iter().any( |&p| p == point)
     }
 
-    fn line(&mut self, start: Point, end: Point) {
-        let p1 = (start.x as i32, start.y as i32);
-        let p2 = (end.x as i32, end.y as i32);
-    
-        for (x, y) in Bresenham::new(p1, p2) {
-            self.walls.push(Point::new(x, y));
-        }
-    }
-
     fn rect(&mut self, p0: Point, p3: Point) {
-        let p1 = Point::new(p3.x, p0.y);
-        let p2 = Point::new(p0.x, p3.y);
-
-        self.line(p0, p1);
-        self.line(p1, p3);
-        self.line(p3, p2);
-        self.line(p2, p0);
+        for point in Rectangle::new(p0, p3) {
+            self.walls.push(point);
+        }
     }
 
 

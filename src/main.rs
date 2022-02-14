@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod point;
+mod draw;
 mod map;
 mod snake;
 mod food;
@@ -77,6 +78,7 @@ fn main() {
                             Some(VirtualKeyCode::W) => world.last_direction=Direction::Up,
                             Some(VirtualKeyCode::D) => world.last_direction=Direction::Right,
 
+                            Some(VirtualKeyCode::Q) => *control_flow = ControlFlow::Exit,
                             Some(VirtualKeyCode::P) => world.add_food(),
                             _ => ()
                         }
