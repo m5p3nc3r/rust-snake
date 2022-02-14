@@ -1,5 +1,5 @@
 use crate::point::Point;
-use crate::draw::{Rectangle};
+use crate::draw::{Line, Rectangle};
 
 use std::ops::Deref;
 
@@ -14,6 +14,10 @@ impl Map {
         };
 
         map.rect(Point::new(0,0), Point::new(width-1, height-1));
+        map.line(Point::new(5, 5), Point::new(10, 5));
+        map.line(Point::new(width-5, 5), Point::new(width-5, 10));
+        map.line(Point::new(width-5, height-5), Point::new(width-10, height-5));
+        map.line(Point::new(5, height-5), Point::new(5, height-10));
 
         map
     }
@@ -24,6 +28,12 @@ impl Map {
 
     fn rect(&mut self, p0: Point, p3: Point) {
         for point in Rectangle::new(p0, p3) {
+            self.walls.push(point);
+        }
+    }
+
+    fn line(&mut self, p0: Point, p1: Point) {
+        for point in Line::new(p0, p1) {
             self.walls.push(point);
         }
     }
