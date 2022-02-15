@@ -78,6 +78,11 @@ fn main() {
                             Some(VirtualKeyCode::W) => world.last_direction=Direction::Up,
                             Some(VirtualKeyCode::D) => world.last_direction=Direction::Right,
 
+                            Some(VirtualKeyCode::Left) => world.last_direction=Direction::Left,
+                            Some(VirtualKeyCode::Down) => world.last_direction=Direction::Down,
+                            Some(VirtualKeyCode::Up) => world.last_direction=Direction::Up,
+                            Some(VirtualKeyCode::Right) => world.last_direction=Direction::Right,
+
                             Some(VirtualKeyCode::Q) => *control_flow = ControlFlow::Exit,
                             Some(VirtualKeyCode::P) => world.add_food(),
                             _ => ()

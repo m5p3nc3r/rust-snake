@@ -145,7 +145,7 @@ impl World {
     fn point(&self, frame: &mut [u8], point: &Point, colour: [u8; 4]) {
         let x = min(point.x as usize, self.width - 1);
         let y = min(point.y as usize, self.height - 1);
-        let i = x * 4 + y * self.width/*WIDTH*/ * 4;
+        let i = x * 4 + y * self.width * 4;
 
         frame[i..i + 4].copy_from_slice(&colour);
     }
