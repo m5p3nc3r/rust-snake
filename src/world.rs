@@ -1,6 +1,6 @@
-use std::cmp::min;
 use std::time::Duration;
 use rand::seq::SliceRandom;
+use std::cmp;
 
 use crate::map::Map;
 use crate::snake::Snake;
@@ -10,6 +10,14 @@ use crate::point::Point;
 pub const WIDTH: usize = 32;
 pub const HEIGHT: usize = 24;
 
+
+pub enum GameEvent {
+    FoodEaten(Point, Option<Point>),
+    SnakeGrown(Point),
+    AddPoints(u32),
+    SpeedChanged(Duration),
+    GameOver,
+}
 
 trait Move {
     fn move_in_direction(&mut self, direction: Direction);
@@ -35,24 +43,47 @@ pub enum Direction {
     Down
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Dimentions {
+    pub screen_width: usize,
+    pub screen_height: usize,
+    pub grid_width: usize,
+    pub grid_height: usize,
+    pub block_size: usize,
+}
+
+impl Dimentions {
+    pub fn update_screen_size(&mut self, width: usize, height: usize) {
+        self.screen_width = width;
+        self.screen_height = height;
+
+        let block_width = (self.screen_width as f32/ self.grid_width  as f32).floor() as i32;
+        let block_height = (self.screen_height as f32/ self.grid_height as f32).floor() as i32;
+        self.block_size = cmp::min(block_width, block_height) as usize;  
+    }
+}
 
 pub struct World {
-    width: usize,
-    height: usize,
+    pub dims: Dimentions,
 
     pub last_direction: Direction,
     pub tick_speed: Duration,
 
-    map: Map,
-    snake: Snake,
-    food: Food,
+    pub map: Map,
+    pub snake: Snake,
+    pub food: Food,
 }
 
 impl World {
     pub fn new() -> Self {
         let mut world = Self {
-            width: WIDTH,
-            height: HEIGHT,
+            dims: Dimentions {
+                grid_width: WIDTH,
+                grid_height: HEIGHT,
+                screen_width: 1280,
+                screen_height: 720,
+                block_size: 30,
+            },
 
             last_direction: Direction::Right,
             tick_speed: Duration::from_millis(500),
@@ -69,12 +100,15 @@ impl World {
         world
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> Vec<GameEvent> {
+        let mut events = vec![];
         if self.can_move_in_direction(self.last_direction) {
-            self.move_in_direction(self.last_direction);
+            events.extend(self.move_in_direction(self.last_direction));
         } else {
-            println!("GAME OVER");
+            events.push(GameEvent::GameOver);
         }
+
+        events
     }
 
     fn can_move_in_direction(&self, direction: Direction) -> bool {
@@ -87,7 +121,9 @@ impl World {
         !(hit_self || hit_wall)
     }
     
-    fn move_in_direction(&mut self, direction: Direction) {
+    fn move_in_direction(&mut self, direction: Direction) -> Vec<GameEvent> {
+        let mut ret = vec![];
+
         // Create a new point that will become the new head
         let mut head = self.snake.get_head();
         head.move_in_direction(direction);
@@ -98,13 +134,18 @@ impl World {
         // Pop the last point of the snake list
         if self.food.is_at(head) {
             self.food.eat(head);
-            self.add_food();
+            let new_food = self.add_food();
+            ret.push(GameEvent::FoodEaten(head, new_food.as_ref().copied()));
+            ret.push(GameEvent::SnakeGrown(self.snake.get_tail()));
+            ret.push(GameEvent::AddPoints(10));
             self.tick_speed -= Duration::from_millis(10);
+            ret.push(GameEvent::SpeedChanged(self.tick_speed));
         } else { 
             self.snake.remove_tail();
         }
-    }
 
+        ret
+    }
 
     fn is_free(&self, point: Point) -> bool {
         let hit_snake = self.snake.is_at(point);
@@ -118,8 +159,8 @@ impl World {
     fn get_free_spaces(&self) -> Vec<Point> {
         let mut free=Vec::new();
 
-        for x in 0..self.width-1 {
-            for y in 0..self.height-1 {
+        for x in 0..self.dims.grid_width-1 {
+            for y in 0..self.dims.grid_height-1 {
                 let point = Point::new(x as i32, y as i32);
                 if self.is_free(point) {
                     free.push(point);
@@ -130,46 +171,14 @@ impl World {
         free
     }
 
-    pub fn add_food(&mut self) {
+    pub fn add_food(&mut self) -> Option<Point> {
         let free_spaces=self.get_free_spaces();
 
         let mut rng = rand::thread_rng();
         let food = free_spaces.choose(&mut rng);
 
         if let Some(f) = food { self.food.add(*f) };
-    }
 
-
-
-    // TODO:: Move these into a rendering class
-    fn point(&self, frame: &mut [u8], point: &Point, colour: [u8; 4]) {
-        let x = min(point.x as usize, self.width - 1);
-        let y = min(point.y as usize, self.height - 1);
-        let i = x * 4 + y * self.width * 4;
-
-        frame[i..i + 4].copy_from_slice(&colour);
-    }
-
-    pub fn draw(&self, frame: &mut [u8] ) {
-        let black = [0x00, 0x00, 0x00, 0xff];
-        let red = [0xff, 0x00, 0x00, 0xff];
-        let white = [0xff, 0xff, 0xff, 0xff];
-        let green = [0x00, 0xff, 0x00, 0xff];
-
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&black);
-        }
-
-        for point in self.map.iter() {
-            self.point(frame, point, red);
-        }
-
-        for point in self.snake.iter() {
-            self.point(frame, point, white);
-        }
-
-        for food in self.food.iter() {
-            self.point(frame,food,green);
-        }
+        food.copied()
     }
 }

@@ -4,7 +4,7 @@ use crate::point::Point;
 use std::ops::Deref;
 
 pub struct Snake {
-    points: Vec<Point>,
+    pub points: Vec<Point>,
 }
 
 impl Snake {
@@ -24,6 +24,10 @@ impl Snake {
 
     pub fn add_head(&mut self, point: Point) {
         self.points.insert(0,point);
+    }
+
+    pub fn get_tail(&self) -> Point {
+        self.points[self.points.len()-1]
     }
 
     pub fn remove_tail(&mut self) -> Option<Point> {

@@ -8,104 +8,224 @@ mod snake;
 mod food;
 mod world;
 
-use log::error;
-use instant::Instant;
-use winit::{
-    dpi::LogicalSize,
-    event::{Event, WindowEvent, StartCause, VirtualKeyCode, ElementState},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
-use pixels::{Pixels, SurfaceTexture, wgpu::Color};
-use crate::world::{World, Direction, WIDTH, HEIGHT};
+use crate::world::{World, GameEvent, Direction, Dimentions};
 
+use bevy:: {
+    core::FixedTimestep,
+    input::keyboard::KeyboardInput,
+    app::Events,
+    window::WindowResized,
+    prelude::*,
+};
+use crate::point::Point;
+
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
+struct FixedUpdateStage;
+
+static WALL_COLOUR: Color = Color::rgb(1.0, 0.0, 0.0);
+static SNAKE_COLOUR: Color = Color::rgb(1.0, 1.0, 1.0);
+static FOOD_COLOUR: Color = Color::rgb(0.0, 1.0, 0.0);
 
 
 fn main() {
-    let event_loop = EventLoop::new();
 
-    let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        let inner_size = LogicalSize::new((WIDTH*20) as f64, (HEIGHT*20) as f64);
-        WindowBuilder::new()
-            .with_title("Rusty Snake")
-            .with_inner_size(inner_size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .insert_resource(WindowDescriptor {
+            title: "Rusty Bevy Snake".to_string(),
+            width: 500.0, height: 300.0, 
+            ..Default::default()
+        })
+        .insert_resource(World::new())
+        .add_startup_system(setup)
+        .add_event::<GameEvent>()
 
-    let mut pixels = {
-        let size = window.inner_size();
-        let surface = SurfaceTexture::new(size.width, size.height, &window);
-        Pixels::new(WIDTH as u32, HEIGHT as u32, surface).unwrap()
-    };
+        .add_system(window_resize_system)
+        .add_system(keyboard_input_system.label("input"))
 
-    pixels.set_clear_color(Color::BLACK);
+        .add_system_set(
+            SystemSet::new()
+                .after("input")
+                .with_run_criteria(
+                    FixedTimestep::step(0.5)
+                )
+                .with_system(game_tick_system.label("tick"))
+                .with_system(snake_movement_system.after("tick"))
+                .with_system(food_redraw_system.after("tick"))
+        )
+        .add_system(game_event_system.after("tick"))
 
-    let mut world = World::new();
+        .add_system(bevy::input::system::exit_on_esc_system)
+        .run();
 
-    event_loop.run(move |event, _, control_flow| {
-        match event {
-            Event::RedrawRequested(_) =>  {
-                world.draw(pixels.get_frame());
+}
 
-                if pixels
-                    .render()
-                    .map_err(|e| error!("pixels.render() failed: {}", e))
-                    .is_err() {
-                    *control_flow = ControlFlow::Exit;
-                }
-            },
+#[derive(Component)]
+struct SnakeCell;
 
-            Event::NewEvents(StartCause::Init) => {
-                *control_flow = ControlFlow::WaitUntil(Instant::now() + world.tick_speed )
-            },
-            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
-                *control_flow = ControlFlow::WaitUntil(Instant::now() + world.tick_speed );
-                world.tick();
-                window.request_redraw();
-            },
 
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::KeyboardInput {
-                    device_id: _, input: kin, is_synthetic: _
-                } => {
-                    if kin.state == ElementState::Pressed {
-                        match kin.virtual_keycode {
-                            Some(VirtualKeyCode::A) => world.last_direction=Direction::Left,
-                            Some(VirtualKeyCode::S) => world.last_direction=Direction::Down,
-                            Some(VirtualKeyCode::W) => world.last_direction=Direction::Up,
-                            Some(VirtualKeyCode::D) => world.last_direction=Direction::Right,
+#[derive(Component)]
+struct WallCell;
 
-                            Some(VirtualKeyCode::Left) => world.last_direction=Direction::Left,
-                            Some(VirtualKeyCode::Down) => world.last_direction=Direction::Down,
-                            Some(VirtualKeyCode::Up) => world.last_direction=Direction::Up,
-                            Some(VirtualKeyCode::Right) => world.last_direction=Direction::Right,
+#[derive(Component)]
+struct FoodCell;
 
-                            Some(VirtualKeyCode::Q) => *control_flow = ControlFlow::Exit,
-                            Some(VirtualKeyCode::P) => world.add_food(),
-                            _ => ()
-                        }
-                    }
-                },
-                WindowEvent::Resized(size) =>  {
-                    pixels.resize_surface(size.width, size.height);
-                    window.request_redraw();
-                    
-                },
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+
+fn coords(point: Point, dims: Dimentions) -> (i32, i32) {
+    let v = (dims.screen_height - (dims.block_size * dims.grid_height)) / 2;
+    let h = (dims.screen_width - (dims.block_size * dims.grid_width)) / 2;
+
+    let block_size_div_2 = (dims.block_size / 2) as i32;
+
+    let x = (point.x * dims.block_size as i32) - (dims.screen_width  as i32 / 2) + h as i32 + block_size_div_2;
+    let y = -((point.y * dims.block_size as i32) - (dims.screen_height as i32 / 2) + v as i32 + block_size_div_2);
+
+    (x, y)
+}
+
+fn create_block(point: Point, colour: Color, dims: Dimentions) -> SpriteBundle {
+    let (x, y) = coords(point, dims);
+
+    SpriteBundle {
+        transform: Transform {
+            scale: Vec3::new(dims.block_size as f32, dims.block_size as f32, 0.0),
+            translation: Vec3::new(x as f32, y as f32, 1.0),
+            ..Default::default()
+        },
+        sprite: Sprite {
+            color: colour,
+            ..Default::default()
+        },
+        ..Default::default()  
+    }
+}
+
+
+fn setup(mut commands: Commands, mut world: ResMut<World>, windows: Res<Windows>) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+
+    let window = windows.get_primary().unwrap();
+
+    world.dims.update_screen_size(window.width() as usize, window.height() as usize);
+
+    for point in world.snake.iter() {
+        commands.spawn_bundle(
+            create_block(*point, SNAKE_COLOUR, world.dims)
+        )
+        .insert(SnakeCell {
+        });
+    }
+
+    for point in world.map.iter() {
+        commands.spawn_bundle(
+            create_block(*point, WALL_COLOUR, world.dims)
+        )
+        .insert(WallCell {
+        });
+    }
+
+    for point in world.food.iter() {
+        commands.spawn_bundle(
+            create_block(*point, FOOD_COLOUR, world.dims)
+        )
+        .insert(FoodCell {
+        });
+    }
+
+}
+fn window_resize_system(mut world: ResMut<World>, resize_event: Res<Events<WindowResized>>) {
+    let mut reader = resize_event.get_reader();
+    for e in reader.iter(&resize_event) {
+        println!("width = {} height = {}", e.width, e.height);
+        world.dims.update_screen_size(e.width as usize, e.height as usize);
+    }
+}
+
+
+fn keyboard_input_system(mut world: ResMut<World>, mut key_evr: EventReader<KeyboardInput>) {
+    use bevy::input::ElementState;
+
+    for ev in key_evr.iter() {
+        if ev.state == ElementState::Pressed {
+            match ev.key_code {
+                Some(KeyCode::A) => world.last_direction = Direction::Left,
+                Some(KeyCode::D) => world.last_direction = Direction::Right,
+                Some(KeyCode::W) => world.last_direction = Direction::Up,
+                Some(KeyCode::S) => world.last_direction = Direction::Down,
+
+                Some(KeyCode::Left) => world.last_direction = Direction::Left,
+                Some(KeyCode::Right) => world.last_direction = Direction::Right,
+                Some(KeyCode::Up) => world.last_direction = Direction::Up,
+                Some(KeyCode::Down) => world.last_direction = Direction::Down,
                 _ => ()
-            },
-
-            // Event::DeviceEvent { event, .. } => match event {
-            //     _ => {
-            //         //println!("Device event {:?}", event);
-            //     }
-            // }
-        
-            _ => (),
+            }
         }
-    });
+    }
+}
+
+fn game_tick_system(mut world: ResMut<World>, mut game_event: EventWriter<GameEvent>) {
+    // Move the game logic forward by one 'tick'
+    let events = world.tick();
+
+    // Issue any events raised
+    for event in events {
+        game_event.send(event);
+    }
+}
+
+
+fn game_event_system(mut commands: Commands, world: Res<World>, mut events: EventReader<GameEvent>) {
+    for event in events.iter() {
+        match event {
+            GameEvent::AddPoints(_score) => (),
+            GameEvent::FoodEaten(_eaten_food, _new_food) => {
+                // TODO: Can we explicity call the food_redraw_system here?
+                //       This will stop it being called on every frame.
+                //       Or, if we can reference the food by 'point', just redraw that one?
+
+            },
+            GameEvent::SnakeGrown(new_cell) => {
+                // We have eaten food - grow the snake by one cell
+                commands.spawn_bundle(
+                    create_block(*new_cell, SNAKE_COLOUR, world.dims)
+                )
+                .insert(SnakeCell {
+                });
+                    
+              
+            },
+            GameEvent::SpeedChanged(duration) =>{
+                println!("TODO: Implement speed change {:?}", duration);
+            },
+            GameEvent::GameOver => {
+                println!("Game over");
+            },
+        }
+    }
+}
+
+fn snake_movement_system(world: Res<World>,mut cell_query: Query<(&SnakeCell, &mut Transform)>) {
+    for (index, (_cell, mut transform)) in cell_query.iter_mut().enumerate() {
+        let point = world.snake.points[index];
+        let (x, y) = coords(point, world.dims);
+
+        let translation = &mut transform.translation;
+        translation.x = x as f32;
+        translation.y = y as f32;
+    }
+}
+
+fn food_redraw_system(world: Res<World>, mut food_query: Query<(&FoodCell, &mut Transform)>) {
+    for (index, (_food, mut transform)) in food_query.iter_mut().enumerate() {
+        let point = world.food.food[index];
+
+        let (x, y) = coords(point, world.dims);
+
+        let translation = &mut transform.translation;
+        translation.x = x as f32;
+        translation.y = y as f32;
+    }
 }
 

@@ -3,7 +3,7 @@ use crate::point::Point;
 use std::ops::Deref;
 
 pub struct Food {
-    food: Vec<Point>,
+    pub food: Vec<Point>,
 }
 
 impl Food {
