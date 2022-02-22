@@ -9,7 +9,7 @@ mod food;
 mod world;
 
 use crate::world::{World, GameEvent, Direction};
-
+use std::cmp;
 use bevy:: {
     core::FixedTimestep,
     input::keyboard::KeyboardInput,
@@ -109,27 +109,41 @@ fn create_block(colour: Color) -> SpriteBundle {
 const WIDTH: usize = 32;
 const HEIGHT: usize = 24;
 
-fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
+fn tile_size(windows: &Res<Windows>) -> (f32, f32, f32) {
     let window = windows.get_primary().unwrap();
+    let tile_size_x = window.width() as f32 / WIDTH as f32;
+    let tile_size_y = window.height() as f32 / HEIGHT as f32;
+
+    let tile_size = cmp::min(tile_size_x as i32, tile_size_y as i32) as f32;
+    let h_offset = (window.width() - (tile_size as f32 * WIDTH as f32)) / 2.;
+    let v_offset = (window.height() - (tile_size as f32 * HEIGHT as f32)) / 2.;
+
+    (tile_size, h_offset, v_offset)
+
+}
+
+fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
+    let (tile_size, _, _) = tile_size(&windows);
+    
     for (sprite_size, mut transform) in q.iter_mut() {
         transform.scale = Vec3::new(
-            sprite_size.width / WIDTH as f32 * window.width() as f32,
-            sprite_size.height / HEIGHT as f32 * window.height() as f32,
-            1.0,
+            sprite_size.width * tile_size, sprite_size.height * tile_size, 1.0
         );
     }
 }
 
 fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
-    fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
-        let tile_size = bound_window / bound_game;
-        pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
-    }
+    let (tile_size, h_offset, v_offset) = tile_size(&windows);
     let window = windows.get_primary().unwrap();
+
+    fn convert(pos: f32, bound_window: f32, tile_size: f32, offset: f32) -> f32 {
+        pos * tile_size - (bound_window / 2.) + tile_size / 2. + offset
+    }
+
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
-            convert(pos.x as f32, window.width() as f32, WIDTH as f32),
-            -convert(pos.y as f32, window.height() as f32, HEIGHT as f32),
+            convert(pos.x as f32, window.width() as f32, tile_size as f32, h_offset),
+            -convert(pos.y as f32, window.height() as f32, tile_size as f32, v_offset),
             0.0,
         );
     }
