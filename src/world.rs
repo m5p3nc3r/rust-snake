@@ -1,6 +1,5 @@
 use std::time::Duration;
 use rand::seq::SliceRandom;
-use std::cmp;
 
 use crate::map::Map;
 use crate::snake::Snake;
@@ -45,22 +44,8 @@ pub enum Direction {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Dimentions {
-    pub screen_width: usize,
-    pub screen_height: usize,
     pub grid_width: usize,
     pub grid_height: usize,
-    pub block_size: usize,
-}
-
-impl Dimentions {
-    pub fn update_screen_size(&mut self, width: usize, height: usize) {
-        self.screen_width = width;
-        self.screen_height = height;
-
-        let block_width = (self.screen_width as f32/ self.grid_width  as f32).floor() as i32;
-        let block_height = (self.screen_height as f32/ self.grid_height as f32).floor() as i32;
-        self.block_size = cmp::min(block_width, block_height) as usize;  
-    }
 }
 
 pub struct World {
@@ -80,9 +65,6 @@ impl World {
             dims: Dimentions {
                 grid_width: WIDTH,
                 grid_height: HEIGHT,
-                screen_width: 1280,
-                screen_height: 720,
-                block_size: 30,
             },
 
             last_direction: Direction::Right,

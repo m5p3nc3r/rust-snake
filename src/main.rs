@@ -8,7 +8,7 @@ mod snake;
 mod food;
 mod world;
 
-use crate::world::{World, GameEvent, Direction, Dimentions};
+use crate::world::{World, GameEvent, Direction};
 
 use bevy:: {
     core::FixedTimestep,
@@ -17,8 +17,6 @@ use bevy:: {
     window::WindowResized,
     prelude::*,
 };
-use crate::point::Point;
-
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
 struct FixedUpdateStage;
@@ -54,6 +52,13 @@ fn main() {
                 .with_system(snake_movement_system.after("tick"))
                 .with_system(food_redraw_system.after("tick"))
         )
+
+        .add_system_set_to_stage(
+            CoreStage::PostUpdate,
+            SystemSet::new()
+                .with_system(position_translation)
+                .with_system(size_scaling),
+        )
         .add_system(game_event_system.after("tick"))
 
         .add_system(bevy::input::system::exit_on_esc_system)
@@ -61,9 +66,29 @@ fn main() {
 
 }
 
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+struct Position {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Component)]
+struct Size {
+    width: f32,
+    height: f32,
+}
+
+impl Size {
+    pub fn square(x: f32) -> Self {
+        Self {
+            width: x,
+            height: x,
+        }
+    }
+}
+
 #[derive(Component)]
 struct SnakeCell;
-
 
 #[derive(Component)]
 struct WallCell;
@@ -71,28 +96,8 @@ struct WallCell;
 #[derive(Component)]
 struct FoodCell;
 
-
-fn coords(point: Point, dims: Dimentions) -> (i32, i32) {
-    let v = (dims.screen_height - (dims.block_size * dims.grid_height)) / 2;
-    let h = (dims.screen_width - (dims.block_size * dims.grid_width)) / 2;
-
-    let block_size_div_2 = (dims.block_size / 2) as i32;
-
-    let x = (point.x * dims.block_size as i32) - (dims.screen_width  as i32 / 2) + h as i32 + block_size_div_2;
-    let y = -((point.y * dims.block_size as i32) - (dims.screen_height as i32 / 2) + v as i32 + block_size_div_2);
-
-    (x, y)
-}
-
-fn create_block(point: Point, colour: Color, dims: Dimentions) -> SpriteBundle {
-    let (x, y) = coords(point, dims);
-
+fn create_block(colour: Color) -> SpriteBundle {
     SpriteBundle {
-        transform: Transform {
-            scale: Vec3::new(dims.block_size as f32, dims.block_size as f32, 0.0),
-            translation: Vec3::new(x as f32, y as f32, 1.0),
-            ..Default::default()
-        },
         sprite: Sprite {
             color: colour,
             ..Default::default()
@@ -101,45 +106,75 @@ fn create_block(point: Point, colour: Color, dims: Dimentions) -> SpriteBundle {
     }
 }
 
+const WIDTH: usize = 32;
+const HEIGHT: usize = 24;
 
-fn setup(mut commands: Commands, mut world: ResMut<World>, windows: Res<Windows>) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-
-
+fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
     let window = windows.get_primary().unwrap();
+    for (sprite_size, mut transform) in q.iter_mut() {
+        transform.scale = Vec3::new(
+            sprite_size.width / WIDTH as f32 * window.width() as f32,
+            sprite_size.height / HEIGHT as f32 * window.height() as f32,
+            1.0,
+        );
+    }
+}
 
-    world.dims.update_screen_size(window.width() as usize, window.height() as usize);
+fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+    fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
+        let tile_size = bound_window / bound_game;
+        pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
+    }
+    let window = windows.get_primary().unwrap();
+    for (pos, mut transform) in q.iter_mut() {
+        transform.translation = Vec3::new(
+            convert(pos.x as f32, window.width() as f32, WIDTH as f32),
+            -convert(pos.y as f32, window.height() as f32, HEIGHT as f32),
+            0.0,
+        );
+    }
+}
+
+
+fn setup(mut commands: Commands, world: ResMut<World>) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 
     for point in world.snake.iter() {
         commands.spawn_bundle(
-            create_block(*point, SNAKE_COLOUR, world.dims)
+            create_block(SNAKE_COLOUR)
         )
+        .insert(Position {x: point.x, y: point.y})
+        .insert(Size::square(1.0))
         .insert(SnakeCell {
         });
     }
 
     for point in world.map.iter() {
         commands.spawn_bundle(
-            create_block(*point, WALL_COLOUR, world.dims)
+            create_block(WALL_COLOUR)
         )
+        .insert(Position {x: point.x, y: point.y})
+        .insert(Size::square(1.0))
         .insert(WallCell {
         });
     }
 
     for point in world.food.iter() {
         commands.spawn_bundle(
-            create_block(*point, FOOD_COLOUR, world.dims)
+            create_block(FOOD_COLOUR)
         )
+        .insert(Position {x: point.x, y: point.y})
+        .insert(Size::square(1.0))
         .insert(FoodCell {
         });
     }
 
 }
-fn window_resize_system(mut world: ResMut<World>, resize_event: Res<Events<WindowResized>>) {
+fn window_resize_system(resize_event: Res<Events<WindowResized>>) {
     let mut reader = resize_event.get_reader();
     for e in reader.iter(&resize_event) {
         println!("width = {} height = {}", e.width, e.height);
-        world.dims.update_screen_size(e.width as usize, e.height as usize);
+//        world.dims.update_screen_size(e.width as usize, e.height as usize);
     }
 }
 
@@ -176,7 +211,7 @@ fn game_tick_system(mut world: ResMut<World>, mut game_event: EventWriter<GameEv
 }
 
 
-fn game_event_system(mut commands: Commands, world: Res<World>, mut events: EventReader<GameEvent>) {
+fn game_event_system(mut commands: Commands, mut events: EventReader<GameEvent>) {
     for event in events.iter() {
         match event {
             GameEvent::AddPoints(_score) => (),
@@ -187,14 +222,13 @@ fn game_event_system(mut commands: Commands, world: Res<World>, mut events: Even
 
             },
             GameEvent::SnakeGrown(new_cell) => {
-                // We have eaten food - grow the snake by one cell
                 commands.spawn_bundle(
-                    create_block(*new_cell, SNAKE_COLOUR, world.dims)
+                    create_block(SNAKE_COLOUR)
                 )
+                .insert(Position {x: new_cell.x, y: new_cell.y})
+                .insert(Size::square(1.0))
                 .insert(SnakeCell {
-                });
-                    
-              
+                });            
             },
             GameEvent::SpeedChanged(duration) =>{
                 println!("TODO: Implement speed change {:?}", duration);
@@ -206,26 +240,21 @@ fn game_event_system(mut commands: Commands, world: Res<World>, mut events: Even
     }
 }
 
-fn snake_movement_system(world: Res<World>,mut cell_query: Query<(&SnakeCell, &mut Transform)>) {
-    for (index, (_cell, mut transform)) in cell_query.iter_mut().enumerate() {
+fn snake_movement_system(world: Res<World>,mut cell_query: Query<(&SnakeCell, &mut Position)>) {
+    for (index, (_cell, mut position)) in cell_query.iter_mut().enumerate() {
         let point = world.snake.points[index];
-        let (x, y) = coords(point, world.dims);
-
-        let translation = &mut transform.translation;
-        translation.x = x as f32;
-        translation.y = y as f32;
+    
+        position.x = point.x;
+        position.y = point.y;
     }
 }
 
-fn food_redraw_system(world: Res<World>, mut food_query: Query<(&FoodCell, &mut Transform)>) {
-    for (index, (_food, mut transform)) in food_query.iter_mut().enumerate() {
+fn food_redraw_system(world: Res<World>, mut food_query: Query<(&FoodCell, &mut Position)>) {
+    for (index, (_food, mut position)) in food_query.iter_mut().enumerate() {
         let point = world.food.food[index];
 
-        let (x, y) = coords(point, world.dims);
-
-        let translation = &mut transform.translation;
-        translation.x = x as f32;
-        translation.y = y as f32;
+        position.x = point.x;
+        position.y = point.y;
     }
 }
 
