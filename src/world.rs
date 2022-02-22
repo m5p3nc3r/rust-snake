@@ -6,10 +6,6 @@ use crate::snake::Snake;
 use crate::food::Food;
 use crate::point::Point;
 
-pub const WIDTH: usize = 32;
-pub const HEIGHT: usize = 24;
-
-
 pub enum GameEvent {
     FoodEaten(Point, Option<Point>),
     SnakeGrown(Point),
@@ -60,17 +56,17 @@ pub struct World {
 }
 
 impl World {
-    pub fn new() -> Self {
+    pub fn new(width: usize, height: usize) -> Self {
         let mut world = Self {
             dims: Dimentions {
-                grid_width: WIDTH,
-                grid_height: HEIGHT,
+                grid_width: width,
+                grid_height: height,
             },
 
             last_direction: Direction::Right,
             tick_speed: Duration::from_millis(500),
 
-            map: Map::new(WIDTH as i32, HEIGHT as i32),
+            map: Map::new(width as i32, height as i32),
             snake: Snake::new(),
             food: Food::new()
         };

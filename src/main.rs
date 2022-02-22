@@ -34,7 +34,7 @@ fn main() {
             width: 500.0, height: 300.0, 
             ..Default::default()
         })
-        .insert_resource(World::new())
+        .insert_resource(World::new(WIDTH, HEIGHT))
         .insert_resource(TickTimer(Timer::from_seconds(0.5, true)))
         .add_startup_system(setup)
         .add_event::<GameEvent>()
