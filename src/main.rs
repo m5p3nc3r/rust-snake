@@ -251,8 +251,8 @@ fn game_event_system(mut commands: Commands, mut events: EventReader<GameEvent>,
     }
 }
 
-fn snake_movement_system(world: Res<World>,mut cell_query: Query<(&SnakeCell, &mut Position)>) {
-    for (index, (_cell, mut position)) in cell_query.iter_mut().enumerate() {
+fn snake_movement_system(world: Res<World>,mut cell_query: Query<&mut Position, With<SnakeCell>>) {
+    for (index, mut position) in cell_query.iter_mut().enumerate() {
         let point = world.snake.points[index];
     
         position.x = point.x;
@@ -260,8 +260,8 @@ fn snake_movement_system(world: Res<World>,mut cell_query: Query<(&SnakeCell, &m
     }
 }
 
-fn food_redraw_system(world: Res<World>, mut food_query: Query<(&FoodCell, &mut Position)>) {
-    for (index, (_food, mut position)) in food_query.iter_mut().enumerate() {
+fn food_redraw_system(world: Res<World>, mut food_query: Query<&mut Position, With<FoodCell>>) {
+    for (index, mut position) in food_query.iter_mut().enumerate() {
         let point = world.food.food[index];
 
         position.x = point.x;
