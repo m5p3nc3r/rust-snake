@@ -11,7 +11,6 @@ mod world;
 use crate::world::{World, GameEvent, Direction};
 use std::cmp;
 use bevy:: {
-    core::FixedTimestep,
     input::keyboard::KeyboardInput,
     app::Events,
     window::WindowResized,
@@ -36,22 +35,17 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(World::new())
+        .insert_resource(TickTimer(Timer::from_seconds(0.5, true)))
         .add_startup_system(setup)
         .add_event::<GameEvent>()
 
         .add_system(window_resize_system)
         .add_system(keyboard_input_system.label("input"))
 
-        .add_system_set(
-            SystemSet::new()
-                .after("input")
-                .with_run_criteria(
-                    FixedTimestep::step(0.5)
-                )
-                .with_system(game_tick_system.label("tick"))
-                .with_system(snake_movement_system.after("tick"))
-                .with_system(food_redraw_system.after("tick"))
-        )
+        .add_system(game_tick_system.label("tick").after("input"))
+        .add_system(snake_movement_system.after("tick"))
+        .add_system(food_redraw_system.after("tick"))
+        .add_system(game_event_system.after("tick"))
 
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
@@ -59,11 +53,9 @@ fn main() {
                 .with_system(position_translation)
                 .with_system(size_scaling),
         )
-        .add_system(game_event_system.after("tick"))
 
         .add_system(bevy::input::system::exit_on_esc_system)
         .run();
-
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
@@ -214,18 +206,23 @@ fn keyboard_input_system(mut world: ResMut<World>, mut key_evr: EventReader<Keyb
     }
 }
 
-fn game_tick_system(mut world: ResMut<World>, mut game_event: EventWriter<GameEvent>) {
-    // Move the game logic forward by one 'tick'
-    let events = world.tick();
+struct TickTimer(Timer);
 
-    // Issue any events raised
-    for event in events {
-        game_event.send(event);
+fn game_tick_system(time: Res<Time>, mut timer: ResMut<TickTimer>, mut world: ResMut<World>, mut game_event: EventWriter<GameEvent>) {
+
+    if timer.0.tick(time.delta()).just_finished() {
+        // Move the game logic forward by one 'tick 
+        let events = world.tick();
+
+        // Issue any events raised
+        for event in events {
+            game_event.send(event);
+        }
     }
 }
 
 
-fn game_event_system(mut commands: Commands, mut events: EventReader<GameEvent>) {
+fn game_event_system(mut commands: Commands, mut events: EventReader<GameEvent>, mut timer: ResMut<TickTimer>) {
     for event in events.iter() {
         match event {
             GameEvent::AddPoints(_score) => (),
@@ -245,7 +242,7 @@ fn game_event_system(mut commands: Commands, mut events: EventReader<GameEvent>)
                 });            
             },
             GameEvent::SpeedChanged(duration) =>{
-                println!("TODO: Implement speed change {:?}", duration);
+                timer.0.set_duration(*duration);
             },
             GameEvent::GameOver => {
                 println!("Game over");
